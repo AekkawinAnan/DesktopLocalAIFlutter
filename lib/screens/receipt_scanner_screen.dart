@@ -25,14 +25,6 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('สแกนบิล/ใบเสร็จ'),
-        actions: [
-          if (_extractedItems.isNotEmpty)
-            IconButton(
-              onPressed: _exportCsv,
-              icon: const Icon(Icons.download),
-              tooltip: 'ส่งออก CSV',
-            ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -117,6 +109,12 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                   }).toList(),
                 ),
               ),
+              ElevatedButton.icon(
+                onPressed: _exportCsv,
+                icon: const Icon(Icons.download),
+                label: const Text('ส่งออก CSV'),
+              ),
+              const SizedBox(height: 16),
             ],
             if (_rawResponse != null) ...[
               const SizedBox(height: 16),
