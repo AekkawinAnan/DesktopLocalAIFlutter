@@ -73,7 +73,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
-                  Text('กำลังอ่านภาพด้วย AI gemma3:4b...'),
+                  Text('กำลังอ่านภาพด้วย AI...'),
                 ],
               ),
             if (_error != null)
