@@ -118,9 +118,9 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                 ),
               ),
             ],
-            if (_rawResponse != null && _extractedItems.isEmpty) ...[
+            if (_rawResponse != null) ...[
               const SizedBox(height: 16),
-              const Text('Raw output'),
+              const Text('Raw output', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(_rawResponse!),
             ],
@@ -187,46 +187,73 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       final bytes = await _images.first.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final messages = <Map<String, dynamic>>[
-        {
-          'role': 'user',
-          'parts': [
-            {
-              'type': 'text',
-              'text': 'นี่คือรูปภาพบิลหรือใบเสร็จ โปรดอ่านรายการสินค้า/บริการ จำนวน และราคาจากภาพ แล้วส่งกลับในรูปแบบ CSV: item,quantity,price',
-            },
-            {
-              'type': 'image_url',
-              'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
-            },
-          ],
-        }
-      ];
+      final userMessage = <String, dynamic>{
+        'role': 'user',
+        'content': 'นี่คือรูปภาพบิลหรือใบเสร็จ โปรดอ่านรายการสินค้า/บริการ จำนวน และราคาจากภาพ แล้วส่งกลับในรูปแบบ CSV: item,quantity,price',
+        'images': [base64Image],
+      };
 
-      final stream = api.chatStream(
-        model: 'gemma3:4b',
-        messages: messages,
-      );
+      debugPrint('ReceiptScanner: selected image bytes=${bytes.length} base64=${base64Image.length}');
+      debugPrint('ReceiptScanner: sending chat request to gemma3:4b with images=${(userMessage['images'] as List).length}');
 
       String fullText = '';
-      await for (final chunk in stream) {
-        if (chunk['done'] == true) {
-          final message = chunk['message'];
-          if (message != null && message['content'] != null) {
-            fullText = message['content'] as String? ?? '';
+      bool receivedAny = false;
+      String? streamError;
+
+      try {
+        final stream = api.chatStream(
+          model: 'gemma3:4b',
+          messages: [userMessage],
+        );
+
+        await for (final chunk in stream) {
+          receivedAny = true;
+          debugPrint('ReceiptScanner: chunk keys=${chunk.keys.toList()}');
+          if (chunk['done'] == true) {
+            if (fullText.isEmpty) {
+              final message = chunk['message'] as Map<String, dynamic>?;
+              if (message != null) {
+                final content = message['content'];
+                if (content is String) {
+                  fullText = content;
+                } else if (content != null) {
+                  fullText = content.toString();
+                }
+              }
+            }
+            break;
           }
-          break;
+
+          final message = chunk['message'] as Map<String, dynamic>?;
+          if (message != null) {
+            final content = message['content'];
+            if (content is String) {
+              fullText += content;
+            } else if (content != null) {
+              fullText += content.toString();
+            }
+          }
         }
-        final message = chunk['message'];
-        if (message != null && message['content'] != null) {
-          fullText += message['content'] as String;
-        }
+      } on Exception catch (e) {
+        streamError = 'Streaming failed: $e';
+        debugPrint('ReceiptScanner: $streamError');
       }
+
+      if (!receivedAny || streamError != null) {
+        final reason = streamError ?? 'AI ไม่ตอบกลับ';
+        setState(() {
+          _error = '$reason — ตรวจสอบว่า gemma3:4b install แล้วและรันอยู่';
+          _rawResponse = streamError ?? '(no response chunks)';
+        });
+        return;
+      }
+
+      debugPrint('ReceiptScanner: fullText=${fullText.isEmpty ? "(empty)" : fullText}');
 
       _parseCsv(fullText);
 
       setState(() {
-        _rawResponse = fullText;
+        _rawResponse = fullText.isEmpty ? '(empty response)' : fullText;
       });
     } catch (e) {
       setState(() {

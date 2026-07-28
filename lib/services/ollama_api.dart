@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/ollama_model.dart';
 
@@ -103,21 +104,24 @@ class OllamaApi {
     final response = await client.send(request);
 
     if (response.statusCode != 200) {
+      debugPrint('OllamaApi: chat status=${response.statusCode}');
       client.close();
       throw Exception('Chat request failed: ${response.statusCode}');
     }
 
+    debugPrint('OllamaApi: chat status=${response.statusCode} streaming response');
     try {
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         for (final line in chunk.split('\n')) {
           if (line.trim().isEmpty) continue;
           try {
             final data = jsonDecode(line);
+            debugPrint('OllamaApi: line=${data['done'] == true ? "done" : data['message']?['content'] ?? line}');
             if (data['done'] == true) {
-              yield {'done': true, 'message': data['message']};
+              yield {'done': true, 'message': data['message'] ?? {}};
               return;
             }
-            yield {'done': false, 'message': data['message']};
+            yield {'done': false, 'message': data['message'] ?? {}};
           } catch (_) {}
         }
       }
