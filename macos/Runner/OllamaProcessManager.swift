@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import os
 
 class OllamaProcessManager: NSObject {
     private var process: Process?
@@ -79,14 +80,22 @@ class OllamaProcessManager: NSObject {
     }
     
     func startOllama() throws -> Bool {
+        print("OllamaProcessManager: startOllama called")
         if isRunning || isStarting {
+            print("OllamaProcessManager: already running or starting")
             return true
         }
         
         isStarting = true
         
-        try ensureRuntimeBinaryExists()
-        try ensureModelsDirectoryExists()
+        do {
+            try ensureRuntimeBinaryExists()
+            try ensureModelsDirectoryExists()
+        } catch {
+            print("OllamaProcessManager: error ensuring binary/models: \(error)")
+            isStarting = false
+            throw error
+        }
         
         let executableURL = URL(fileURLWithPath: ollamaBinaryPath)
         
@@ -134,17 +143,17 @@ class OllamaProcessManager: NSObject {
         process.terminationHandler = { [weak self] process in
             guard let self = self else { return }
             if self.process === process {
+                print("OllamaProcessManager: process terminated")
                 self.isRunning = false
                 self.isStarting = false
                 self.process = nil
+                self.outputPipe = nil
+                self.errorPipe = nil
                 // Clean up readability handlers and handles
                 self.outputHandle?.readabilityHandler = nil
-                self.outputHandle = nil
-                self.outputPipe = nil
-                
                 self.errorHandle?.readabilityHandler = nil
+                self.outputHandle = nil
                 self.errorHandle = nil
-                self.errorPipe = nil
             }
         }
         
@@ -152,18 +161,35 @@ class OllamaProcessManager: NSObject {
         self.outputPipe = outputPipe
         self.errorPipe = errorPipe
         
-        try process.run()
+        do {
+            try process.run()
+            print("OllamaProcessManager: process launched successfully")
+        } catch {
+            print("OllamaProcessManager: failed to launch process: \(error)")
+            // Clean up on failure
+            outputHandle.readabilityHandler = nil
+            errorHandle.readabilityHandler = nil
+            self.outputHandle = nil
+            self.errorHandle = nil
+            self.process = nil
+            self.outputPipe = nil
+            self.errorPipe = nil
+            self.isStarting = false
+            throw error
+        }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self = self else { return }
             self.isRunning = process.isRunning
             self.isStarting = false
+            print("OllamaProcessManager: after delay, isRunning=\(self.isRunning)")
         }
         
         return true
     }
     
     func stopOllama() throws -> Bool {
+        print("OllamaProcessManager: stopOllama called")
         if let process = process, isRunning {
             process.terminate()
             
@@ -177,12 +203,14 @@ class OllamaProcessManager: NSObject {
             self.errorPipe = nil
             // Remove readability handlers
             outputHandle?.readabilityHandler = nil
-            outputHandle = nil
             errorHandle?.readabilityHandler = nil
-            errorHandle = nil
+            self.outputHandle = nil
+            self.errorHandle = nil
+            print("OllamaProcessManager: stopped Ollama")
             return true
         }
         
+        print("OllamaProcessManager: stopOllama called but not running")
         return false
     }
     
