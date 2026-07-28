@@ -295,24 +295,48 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     for (final item in _extractedItems) {
       buffer.writeln('${item['item']},${item['quantity']},${item['price']}');
     }
-    if (mounted) {
-      await showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('CSV Output'),
-            content: SingleChildScrollView(
-              child: SelectableText(buffer.toString()),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('ปิด'),
-              ),
-            ],
-          );
-        },
+
+    try {
+      final homeDir = Platform.environment['HOME'] ?? '';
+      final downloadsDir = Directory('$homeDir/Downloads/OllamaSidecar');
+      if (!await downloadsDir.exists()) {
+        await downloadsDir.create(recursive: true);
+      }
+      final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${downloadsDir.path}/receipt_$timestamp.csv');
+      await file.writeAsString(buffer.toString(), flush: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('บันทึก CSV ที่ ${file.path}'),
+          action: SnackBarAction(
+            label: 'เปิดโฟลเดอร์',
+            onPressed: () async {
+              try {
+                final result = await Process.run('open', [downloadsDir.path]);
+                if (result.exitCode != 0 && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('เปิดโฟลเดอร์ไม่สำเร็จ')),
+                  );
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('เปิดโฟลเดอร์ไม่สำเร็จ')),
+                  );
+                }
+              }
+            },
+          ),
+        ),
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('บันทึก CSV ไม่สำเร็จ: $e')),
+        );
+      }
     }
   }
 }
