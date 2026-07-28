@@ -120,11 +120,28 @@ class OllamaProcessManager: NSObject {
         outputHandle.readInBackgroundAndNotify()
         errorHandle.readInBackgroundAndNotify()
 
-        try process!.run()
         isRunning = true
 
-        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.monitorProcess()
+        process!.terminationHandler = { [weak self] process in
+            guard let self = self else { return }
+            if self.process === process {
+                self.isRunning = false
+                self.process = nil
+                self.outputPipe = nil
+                self.errorPipe = nil
+            }
+        }
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.process!.run()
+            } catch {
+                self.isRunning = false
+                self.process = nil
+                self.outputPipe = nil
+                self.errorPipe = nil
+            }
         }
 
         return true
@@ -136,20 +153,6 @@ class OllamaProcessManager: NSObject {
         }
 
         process.terminate()
-
-        let timeout = Date().addingTimeInterval(10.0)
-        while process.isRunning && Date() < timeout {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-
-        if process.isRunning {
-            process.interrupt()
-        }
-
-        isRunning = false
-        self.process = nil
-        outputPipe = nil
-        errorPipe = nil
 
         return true
     }

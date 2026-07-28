@@ -21,24 +21,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final binaryPath = await OllamaProcessService.getOllamaBinaryPath();
-    final modelsDir = await OllamaProcessService.getModelsDirectory();
-    final version = await OllamaProcessService.getOllamaVersion();
-    final running = await OllamaProcessService.isOllamaRunning();
+    try {
+      final binaryPath = await OllamaProcessService.getOllamaBinaryPath();
+      final modelsDir = await OllamaProcessService.getModelsDirectory();
+      final version = await OllamaProcessService.getOllamaVersion();
+      final running = await OllamaProcessService.isOllamaRunning();
 
-    setState(() {
-      _ollamaBinaryPath = binaryPath;
-      _modelsDirectory = modelsDir;
-      _ollamaVersion = version;
-      _isRunning = running;
-    });
+      setState(() {
+        _ollamaBinaryPath = binaryPath;
+        _modelsDirectory = modelsDir;
+        _ollamaVersion = version;
+        _isRunning = running;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load settings: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _toggleOllama() async {
-    if (_isRunning) {
-      await OllamaProcessService.stopOllama();
-    } else {
-      await OllamaProcessService.startOllama();
+    try {
+      if (_isRunning) {
+        await OllamaProcessService.stopOllama();
+      } else {
+        await OllamaProcessService.startOllama();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to toggle Ollama: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
     _loadSettings();
   }
