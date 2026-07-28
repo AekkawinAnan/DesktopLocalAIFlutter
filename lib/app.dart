@@ -6,6 +6,7 @@ import 'screens/chat_screen.dart';
 import '../services/chat_service.dart';
 import 'screens/model_selector.dart';
 import 'screens/settings_screen.dart';
+import 'screens/receipt_scanner_screen.dart';
 
 class OllamaSidecarApp extends StatelessWidget {
   const OllamaSidecarApp({super.key});
@@ -27,6 +28,7 @@ class OllamaSidecarApp extends StatelessWidget {
           '/engine-setup': (context) => const EngineSetupScreen(),
           '/models': (context) => const ModelSelector(),
           '/settings': (context) => const SettingsScreen(),
+          '/receipt-scanner': (context) => const ReceiptScannerScreen(),
         },
       ),
     );

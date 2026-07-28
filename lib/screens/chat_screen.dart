@@ -160,6 +160,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 Navigator.pushNamed(context, '/models');
               },
             ),
+            IconButton(
+              icon: const Icon(Icons.receipt_long),
+              onPressed: () {
+                Navigator.pushNamed(context, '/receipt-scanner');
+              },
+              tooltip: 'สแกนบิล/ใบเสร็จ',
+            ),
           ],
         ),
         body: Column(
