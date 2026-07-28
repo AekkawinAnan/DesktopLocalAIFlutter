@@ -15,6 +15,7 @@ class _ModelSelectorState extends State<ModelSelector> {
   bool _isLoading = false;
   String _pullingModel = '';
   int _pullProgress = 0;
+  final TextEditingController _pullController = TextEditingController();
 
   @override
   void initState() {
@@ -22,11 +23,18 @@ class _ModelSelectorState extends State<ModelSelector> {
     _loadModels();
   }
 
+  @override
+  void dispose() {
+    _pullController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadModels() async {
     setState(() => _isLoading = true);
     try {
       final isConnected = await OllamaApi().checkConnection();
       if (!isConnected) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Ollama server is not running. Please start it first.'),
@@ -38,6 +46,7 @@ class _ModelSelectorState extends State<ModelSelector> {
       final models = await OllamaApi().listModels();
       setState(() => _models = models);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load models: $e'),
@@ -45,30 +54,38 @@ class _ModelSelectorState extends State<ModelSelector> {
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _pullModel(String modelName) async {
+    final trimmed = modelName.trim();
+    if (trimmed.isEmpty) return;
+
     setState(() {
-      _pullingModel = modelName;
+      _pullingModel = trimmed;
       _pullProgress = 0;
     });
 
     try {
       await OllamaApi().pullModel(
-        modelName,
+        trimmed,
         onProgress: (completed) {
-          setState(() {
-            _pullProgress = completed;
-          });
+          if (mounted) {
+            setState(() => _pullProgress = completed);
+          }
         },
       );
-      _loadModels();
+      _pullController.clear();
+      await _loadModels();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Model "$modelName" pulled successfully')),
+        SnackBar(content: Text('Model "$trimmed" pulled successfully')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to pull model: $e'),
@@ -76,10 +93,12 @@ class _ModelSelectorState extends State<ModelSelector> {
         ),
       );
     } finally {
-      setState(() {
-        _pullingModel = '';
-        _pullProgress = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _pullingModel = '';
+          _pullProgress = 0;
+        });
+      }
     }
   }
 
@@ -98,18 +117,60 @@ class _ModelSelectorState extends State<ModelSelector> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _pullController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter model name, e.g. llama3.2',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: _pullModel,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _pullingModel.isEmpty
+                      ? () => _pullModel(_pullController.text)
+                      : null,
+                  child: const Icon(Icons.download),
+                ),
+              ],
+            ),
+          ),
+          if (_pullingModel.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Pulling $_pullingModel...'),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: _pullProgress > 0 ? _pullProgress / 100.0 : null,
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 12),
           if (_isLoading)
             const LinearProgressIndicator()
           else
             const SizedBox.shrink(),
           Expanded(
             child: _models.isEmpty
-                ? const Center(child: Text('No models available. Pull a model to get started.'))
+                ? const Center(
+                    child: Text('No models available. Pull a model to get started.'),
+                  )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     itemCount: _models.length,
                     itemBuilder: (context, index) {
                       final model = _models[index];
+                      final isPulling = _pullingModel == model.name;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
@@ -117,15 +178,12 @@ class _ModelSelectorState extends State<ModelSelector> {
                           subtitle: Text(
                             'Size: ${(model.size / 1024 / 1024).toStringAsFixed(1)} MB',
                           ),
-                          trailing: _pullingModel == model.name
-                              ? SizedBox(
+                          trailing: isPulling
+                              ? const SizedBox(
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    value: _pullProgress > 0
-                                        ? _pullProgress / 100.0
-                                        : null,
                                   ),
                                 )
                               : IconButton(

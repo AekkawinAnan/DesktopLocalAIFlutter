@@ -8,6 +8,7 @@ class OllamaProcessManager: NSObject {
     private var outputData: Data = Data()
     private var errorData: Data = Data()
     private var isRunning = false
+    private var isStarting = false
 
     static let shared = OllamaProcessManager()
 
@@ -75,44 +76,45 @@ class OllamaProcessManager: NSObject {
     }
 
     func startOllama() throws -> Bool {
-        if isRunning {
+        if isRunning || isStarting {
             return true
         }
+
+        isStarting = true
 
         try ensureRuntimeBinaryExists()
         try ensureModelsDirectoryExists()
 
         let executableURL = URL(fileURLWithPath: ollamaBinaryPath)
 
-        process = Process()
-        process!.executableURL = executableURL
-        process!.arguments = ["serve"]
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["serve"]
 
         let environment = ProcessInfo.processInfo.environment
         var newEnvironment = environment
         newEnvironment["OLLAMA_HOST"] = "127.0.0.1:11434"
         newEnvironment["OLLAMA_MODELS"] = modelsDirectory
         newEnvironment["OLLAMA_ORIGINS"] = "*"
-        process!.environment = newEnvironment
+        process.environment = newEnvironment
 
-        outputPipe = Pipe()
-        errorPipe = Pipe()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
 
-        process!.standardOutput = outputPipe
-        process!.standardError = errorPipe
-
-        let outputHandle = outputPipe!.fileHandleForReading
-        let errorHandle = errorPipe!.fileHandleForReading
+        let outputHandle = outputPipe.fileHandleForReading
+        let errorHandle = errorPipe.fileHandleForReading
 
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleOutputData(_:)),
+            selector: #selector(self.handleOutputData(_:)),
             name: FileHandle.readCompletionNotification,
             object: outputHandle
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleErrorData(_:)),
+            selector: #selector(self.handleErrorData(_:)),
             name: FileHandle.readCompletionNotification,
             object: errorHandle
         )
@@ -120,41 +122,48 @@ class OllamaProcessManager: NSObject {
         outputHandle.readInBackgroundAndNotify()
         errorHandle.readInBackgroundAndNotify()
 
-        isRunning = true
-
-        process!.terminationHandler = { [weak self] process in
+        process.terminationHandler = { [weak self] process in
             guard let self = self else { return }
             if self.process === process {
                 self.isRunning = false
+                self.isStarting = false
                 self.process = nil
                 self.outputPipe = nil
                 self.errorPipe = nil
             }
         }
 
-        DispatchQueue.global(qos: .background).async { [weak self] in
+        self.process = process
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
+
+        try process.run()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self = self else { return }
-            do {
-                try self.process!.run()
-            } catch {
-                self.isRunning = false
-                self.process = nil
-                self.outputPipe = nil
-                self.errorPipe = nil
-            }
+            self.isRunning = process.isRunning
+            self.isStarting = false
         }
 
         return true
     }
 
     func stopOllama() throws -> Bool {
-        guard let process = process, isRunning else {
-            return false
+        if let process = process, isRunning {
+            process.terminate()
+
+            if process.isRunning {
+                process.interrupt()
+            }
+
+            isRunning = false
+            self.process = nil
+            outputPipe = nil
+            errorPipe = nil
+            return true
         }
 
-        process.terminate()
-
-        return true
+        return false
     }
 
     func isOllamaRunning() -> Bool {
@@ -186,12 +195,5 @@ class OllamaProcessManager: NSObject {
         guard !data.isEmpty else { return }
         errorData.append(data)
         handle.readInBackgroundAndNotify()
-    }
-
-    private func monitorProcess() {
-        guard let process = process else { return }
-        if !process.isRunning {
-            isRunning = false
-        }
     }
 }

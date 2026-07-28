@@ -30,7 +30,7 @@ class OllamaApi {
   Future<List<OllamaModel>> listModels() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/tags'),
-    );
+    ).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Failed to list models: ${response.statusCode}');
     }
@@ -40,35 +40,42 @@ class OllamaApi {
   }
 
   Future<void> pullModel(String modelName, {Function(int)? onProgress}) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/pull'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': modelName, 'stream': true}),
-    );
+    final client = http.Client();
+    try {
+      final request = http.Request(
+        'POST',
+        Uri.parse('$baseUrl/api/pull'),
+      );
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({'name': modelName, 'stream': true});
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to pull model: ${response.statusCode}');
-    }
+      final response = await client.send(request).timeout(const Duration(minutes: 30));
 
-    final lines = response.body.split('\n');
-    for (final line in lines) {
-      if (line.trim().isEmpty) continue;
-      try {
-        final data = jsonDecode(line);
-        if (data['total'] != null && data['completed'] != null && onProgress != null) {
-          final completed = data['completed'] as int;
-          onProgress(completed);
-        }
-      } catch (_) {
-        continue;
+      if (response.statusCode != 200) {
+        throw Exception('Failed to pull model: ${response.statusCode}');
       }
+
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        for (final line in chunk.split('\n')) {
+          if (line.trim().isEmpty) continue;
+          try {
+            final data = jsonDecode(line);
+            if (data['total'] != null && data['completed'] != null && onProgress != null) {
+              final completed = data['completed'] as int;
+              onProgress(completed);
+            }
+          } catch (_) {}
+        }
+      }
+    } finally {
+      client.close();
     }
   }
 
   Future<String> getVersion() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/version'),
-    );
+    ).timeout(const Duration(seconds: 5));
     if (response.statusCode != 200) {
       throw Exception('Failed to get version: ${response.statusCode}');
     }
@@ -81,33 +88,41 @@ class OllamaApi {
     required List<Map<String, dynamic>> messages,
     bool stream = true,
   }) async* {
-    final response = await http.post(
+    final client = http.Client();
+    final request = http.Request(
+      'POST',
       Uri.parse('$baseUrl/api/chat'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'model': model,
-        'messages': messages,
-        'stream': stream,
-      }),
     );
+    request.headers['Content-Type'] = 'application/json';
+    request.body = jsonEncode({
+      'model': model,
+      'messages': messages,
+      'stream': stream,
+    });
+
+    final response = await client.send(request);
 
     if (response.statusCode != 200) {
+      client.close();
       throw Exception('Chat request failed: ${response.statusCode}');
     }
 
-    final lines = response.body.split('\n');
-    for (final line in lines) {
-      if (line.trim().isEmpty) continue;
-      try {
-        final data = jsonDecode(line);
-        if (data['done'] == true) {
-          yield {'done': true, 'message': data['message']};
-          return;
+    try {
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        for (final line in chunk.split('\n')) {
+          if (line.trim().isEmpty) continue;
+          try {
+            final data = jsonDecode(line);
+            if (data['done'] == true) {
+              yield {'done': true, 'message': data['message']};
+              return;
+            }
+            yield {'done': false, 'message': data['message']};
+          } catch (_) {}
         }
-        yield {'done': false, 'message': data['message']};
-      } catch (_) {
-        continue;
       }
+    } finally {
+      client.close();
     }
   }
 
@@ -116,33 +131,41 @@ class OllamaApi {
     required String prompt,
     bool stream = true,
   }) async* {
-    final response = await http.post(
+    final client = http.Client();
+    final request = http.Request(
+      'POST',
       Uri.parse('$baseUrl/api/generate'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'model': model,
-        'prompt': prompt,
-        'stream': stream,
-      }),
     );
+    request.headers['Content-Type'] = 'application/json';
+    request.body = jsonEncode({
+      'model': model,
+      'prompt': prompt,
+      'stream': stream,
+    });
+
+    final response = await client.send(request);
 
     if (response.statusCode != 200) {
+      client.close();
       throw Exception('Generate request failed: ${response.statusCode}');
     }
 
-    final lines = response.body.split('\n');
-    for (final line in lines) {
-      if (line.trim().isEmpty) continue;
-      try {
-        final data = jsonDecode(line);
-        if (data['done'] == true) {
-          yield {'done': true, 'response': data['response']};
-          return;
+    try {
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        for (final line in chunk.split('\n')) {
+          if (line.trim().isEmpty) continue;
+          try {
+            final data = jsonDecode(line);
+            if (data['done'] == true) {
+              yield {'done': true, 'response': data['response']};
+              return;
+            }
+            yield {'done': false, 'response': data['response']};
+          } catch (_) {}
         }
-        yield {'done': false, 'response': data['response']};
-      } catch (_) {
-        continue;
       }
+    } finally {
+      client.close();
     }
   }
 
@@ -151,7 +174,7 @@ class OllamaApi {
       Uri.parse('$baseUrl/api/delete'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'name': modelName}),
-    );
+    ).timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
       throw Exception('Failed to delete model: ${response.statusCode}');
     }

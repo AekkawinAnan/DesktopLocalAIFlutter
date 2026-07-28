@@ -34,6 +34,19 @@ class ChatService extends ChangeNotifier {
     _messages.add(userMsg);
     notifyListeners();
 
+    Timer? _streamTimer;
+    String _pendingStreamContent = '';
+
+    void _scheduleStreamFlush() {
+      _streamTimer?.cancel();
+      _streamTimer = Timer(const Duration(milliseconds: 32), () {
+        if (_pendingStreamContent.isNotEmpty && !_streamController.isClosed) {
+          _streamController.add(_pendingStreamContent);
+          _pendingStreamContent = '';
+        }
+      });
+    }
+
     try {
       final stream = _api.chatStream(
         model: model,
@@ -48,6 +61,11 @@ class ChatService extends ChangeNotifier {
 
       await for (final chunk in stream) {
         if (chunk['done'] == true) {
+          _streamTimer?.cancel();
+          if (_pendingStreamContent.isNotEmpty && !_streamController.isClosed) {
+            _streamController.add(_pendingStreamContent);
+            _pendingStreamContent = '';
+          }
           final assistantMsg = Message(
             id: assistantId,
             role: 'assistant',
@@ -63,12 +81,14 @@ class ChatService extends ChangeNotifier {
         if (message != null && message['content'] != null) {
           final content = message['content'] as String;
           assistantContent += content;
-          _streamController.add(content);
+          _pendingStreamContent += content;
+          _scheduleStreamFlush();
         }
       }
     } catch (e) {
       _streamController.addError(e);
     } finally {
+      _streamTimer?.cancel();
       _isStreaming = false;
       notifyListeners();
     }
