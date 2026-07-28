@@ -42,7 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
 
     final chatService = context.read<ChatService>();
-    chatService.sendMessage(text).then((_) {
+    chatService.sendMessage(text, model: chatService.currentModel).then((_) {
       _scrollToBottom();
     });
   }

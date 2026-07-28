@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/ollama_model.dart';
 import '../services/ollama_api.dart';
+import '../services/chat_service.dart';
 import '../widgets/status_indicator.dart';
 
 class ModelSelector extends StatefulWidget {
@@ -84,6 +86,7 @@ class _ModelSelectorState extends State<ModelSelector> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Model "$trimmed" pulled successfully')),
       );
+      context.read<ChatService>().setModel(trimmed);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

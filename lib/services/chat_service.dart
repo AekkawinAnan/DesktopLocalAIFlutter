@@ -18,8 +18,21 @@ class ChatService extends ChangeNotifier {
   bool get isStreaming => _isStreaming;
   Stream<String> get stream => _streamController.stream;
 
-  Future<void> sendMessage(String userMessage, {String model = 'llama3'}) async {
+  void setModel(String model) {
+    _currentModel = model;
+    notifyListeners();
+  }
+
+  Future<void> sendMessage(String userMessage, {String model = ''}) async {
     if (_isStreaming) return;
+
+    if (model.isEmpty) {
+      model = _currentModel;
+    }
+
+    if (model.isEmpty) {
+      model = 'deepseek-r1:1.5b';
+    }
 
     _currentModel = model;
     _isStreaming = true;
