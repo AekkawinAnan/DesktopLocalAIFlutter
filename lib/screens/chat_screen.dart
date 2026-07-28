@@ -64,7 +64,34 @@ class _ChatScreenState extends State<ChatScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Ollama Sidecar'),
+          title: Consumer<ChatService>(
+            builder: (context, chatService, child) {
+              final modelText = chatService.currentModel.isEmpty ? 'กำลังเลือก Model...' : chatService.currentModel;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Ollama Sidecar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: chatService.currentModel.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      modelText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: chatService.currentModel.isEmpty ? Colors.white : Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
           actions: [
             const StatusIndicator(),
             IconButton(
