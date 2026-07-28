@@ -1,0 +1,64 @@
+# Ollama Sidecar macOS App
+
+A Flutter macOS application that bundles the Ollama binary as an embedded sidecar for local AI chat.
+
+## Project Structure
+
+```
+ollama_sidecar_app/
+├── macos/
+│   ├── Runner/
+│   │   ├── AppDelegate.swift
+│   │   ├── MainFlutterWindow.swift
+│   │   ├── OllamaProcessManager.swift
+│   │   └── OllamaMethodChannel.swift
+│   ├── Runner.xcodeproj/
+│   ├── Flutter/
+│   └── Podfile
+├── lib/
+│   ├── main.dart
+│   ├── app.dart
+│   ├── services/
+│   │   ├── ollama_api.dart
+│   │   ├── ollama_process.dart
+│   │   └── chat_service.dart
+│   ├── models/
+│   │   ├── message.dart
+│   │   ├── ollama_model.dart
+│   │   └── chat_session.dart
+│   ├── screens/
+│   │   ├── chat_screen.dart
+│   │   ├── model_selector.dart
+│   │   └── settings_screen.dart
+│   └── widgets/
+│       ├── message_bubble.dart
+│       ├── streaming_text.dart
+│       └── status_indicator.dart
+├── assets/
+│   └── ollama-darwin-arm64
+├── scripts/
+│   └── copy_ollama_binary.sh
+├── pubspec.yaml
+└── README.md
+```
+
+## Key Conventions
+
+- Method channel name: `com.example.ollama_sidecar`
+- Ollama API base URL: `http://127.0.0.1:11434`
+- Model storage: `~/Library/Application Support/OllamaSidecar/models`
+- Ollama binary in bundle: `Contents/MacOS/ollama`
+- Ollama binary runtime path: `~/Library/Application Support/OllamaSidecar/ollama`
+
+## Dependencies
+
+- `http` — Ollama REST API calls
+- `provider` — state management
+- `uuid` — message/session IDs
+
+## Build Notes
+
+- Ollama binary must be downloaded before building (see `scripts/copy_ollama_binary.sh`)
+- Code signing required for macOS distribution
+- Entitlements include `com.apple.security.cs.allow-unsigned-executable-memory` for running the embedded Ollama binary
+- Minimum macOS deployment target: 14.0
