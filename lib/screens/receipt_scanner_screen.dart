@@ -73,7 +73,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
-                  Text('กำลังอ่านภาพด้วย AI...'),
+                  Text('กำลังอ่านภาพด้วย AI gemma3:12b...'),
                 ],
               ),
             if (_error != null)
@@ -201,7 +201,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
       try {
         final stream = api.chatStream(
-          model: 'gemma3:4b',
+          model: 'gemma3:12b',
           messages: [userMessage],
         );
 
