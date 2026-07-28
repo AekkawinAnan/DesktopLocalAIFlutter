@@ -1,7 +1,32 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
-class OllamaProcessService {
+class OllamaSystemService {
   static const _channel = MethodChannel('com.example.ollama_sidecar');
+
+  static const _defaultHost = '127.0.0.1';
+  static const _defaultPort = 11434;
+  static Uri get _versionUri => Uri.parse('http://$_defaultHost:$_defaultPort/api/version');
+
+  static Future<bool> isOllamaRunning() async {
+    try {
+      final client = http.Client();
+      final response = await client.get(_versionUri).timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> installOllama() async {
+    try {
+      final result = await _channel.invokeMethod('installOllama');
+      return result['success'] as bool? ?? false;
+    } on PlatformException catch (e) {
+      throw Exception('Failed to install Ollama: ${e.message}');
+    }
+  }
 
   static Future<bool> startOllama() async {
     try {
@@ -18,15 +43,6 @@ class OllamaProcessService {
       return result['success'] as bool? ?? false;
     } on PlatformException catch (e) {
       throw Exception('Failed to stop Ollama: ${e.message}');
-    }
-  }
-
-  static Future<bool> isOllamaRunning() async {
-    try {
-      final result = await _channel.invokeMethod('isOllamaRunning');
-      return result['running'] as bool? ?? false;
-    } on PlatformException catch (e) {
-      throw Exception('Failed to check Ollama status: ${e.message}');
     }
   }
 

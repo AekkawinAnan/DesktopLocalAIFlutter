@@ -1,6 +1,6 @@
 # Ollama Sidecar macOS App
 
-A Flutter macOS application that bundles the Ollama binary as an embedded sidecar for local AI chat.
+A Flutter macOS application that detects an installed Ollama server, or auto-downloads and installs Ollama on demand, then communicates with it via the local HTTP API for local AI chat.
 
 ## Project Structure
 
@@ -27,6 +27,8 @@ ollama_sidecar_app/
 │   │   ├── ollama_model.dart
 │   │   └── chat_session.dart
 │   ├── screens/
+│   │   ├── initialization_screen.dart
+│   │   ├── engine_setup_screen.dart
 │   │   ├── chat_screen.dart
 │   │   ├── model_selector.dart
 │   │   └── settings_screen.dart
@@ -34,10 +36,6 @@ ollama_sidecar_app/
 │       ├── message_bubble.dart
 │       ├── streaming_text.dart
 │       └── status_indicator.dart
-├── assets/
-│   └── ollama-darwin-arm64
-├── scripts/
-│   └── copy_ollama_binary.sh
 ├── pubspec.yaml
 └── README.md
 ```
@@ -47,8 +45,7 @@ ollama_sidecar_app/
 - Method channel name: `com.example.ollama_sidecar`
 - Ollama API base URL: `http://127.0.0.1:11434`
 - Model storage: `~/Library/Application Support/OllamaSidecar/models`
-- Ollama binary in bundle: `Contents/MacOS/ollama`
-- Ollama binary runtime path: `~/Library/Application Support/OllamaSidecar/ollama`
+- Ollama binary runtime path (after install): `~/Library/Application Support/OllamaSidecar/ollama-bin/ollama`
 
 ## Dependencies
 
@@ -58,7 +55,7 @@ ollama_sidecar_app/
 
 ## Build Notes
 
-- Ollama binary must be downloaded before building (see `scripts/copy_ollama_binary.sh`)
+- Ollama binary is NOT bundled; it is auto-downloaded on first launch when missing
 - Code signing required for macOS distribution
-- Entitlements include `com.apple.security.cs.allow-unsigned-executable-memory` for running the embedded Ollama binary
+- Entitlements include `com.apple.security.cs.allow-unsigned-executable-memory` and `com.apple.security.network.client`
 - Minimum macOS deployment target: 14.0

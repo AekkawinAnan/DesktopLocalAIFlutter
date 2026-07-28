@@ -1,21 +1,21 @@
 # Ollama Sidecar macOS App
 
-A Flutter macOS application that bundles the Ollama binary as an embedded sidecar for local AI chat. The app manages the Ollama server lifecycle internally and communicates with it via the local HTTP API, providing a self-contained local AI chat experience with no external Ollama installation required.
+A Flutter macOS application that auto-detects Ollama on the local machine. If no Ollama server is found, the app silently downloads and installs Ollama in the background, then starts it for local AI chat.
 
 ## Features
 
-- **Embedded Ollama Binary**: Ollama v0.31.1 (arm64) bundled in the app bundle
-- **Server Lifecycle Management**: Start/stop Ollama server from within the app
-- **Chat UI**: Streaming chat interface with message bubbles
-- **Model Management**: List available models and pull new models
-- **Settings**: Server status, paths, and server control
+- **Auto-Detect**: Checks `http://localhost:11434` on launch.
+- **Auto-Install**: Downloads the Ollama release and installs it into `~/Library/Application Support/OllamaSidecar/ollama-bin` without embedding a binary in the app bundle.
+- **Chat UI**: Streaming chat interface with message bubbles.
+- **Model Management**: List available models and pull new models.
+- **Settings**: Server status, paths, and server control.
 
 ## Architecture
 
 ```
 Flutter UI (Dart)
-    ↕ Platform Channels (com.example.ollama_sidecar)
-Native Swift (Process Manager)
+    ↕ Method Channel (com.example.ollama_sidecar)
+Native Swift (Process Manager + Installer)
     ↕ HTTP
 Ollama API (localhost:11434)
 ```
@@ -29,11 +29,7 @@ ollama_sidecar_app/
 │   │   ├── AppDelegate.swift
 │   │   ├── MainFlutterWindow.swift
 │   │   ├── OllamaProcessManager.swift
-│   │   ├── OllamaMethodChannel.swift
-│   │   └── ollama              # Embedded Ollama binary
-│   ├── Runner.xcodeproj/
-│   ├── Flutter/
-│   └── Podfile
+│   │   └── OllamaMethodChannel.swift
 ├── lib/
 │   ├── main.dart
 │   ├── app.dart
@@ -46,6 +42,8 @@ ollama_sidecar_app/
 │   │   ├── ollama_model.dart
 │   │   └── chat_session.dart
 │   ├── screens/
+│   │   ├── initialization_screen.dart
+│   │   ├── engine_setup_screen.dart
 │   │   ├── chat_screen.dart
 │   │   ├── model_selector.dart
 │   │   └── settings_screen.dart
@@ -53,10 +51,6 @@ ollama_sidecar_app/
 │       ├── message_bubble.dart
 │       ├── streaming_text.dart
 │       └── status_indicator.dart
-├── assets/
-│   └── ollama-darwin-arm64
-├── scripts/
-│   └── copy_ollama_binary.sh
 ├── pubspec.yaml
 └── README.md
 ```
@@ -66,8 +60,7 @@ ollama_sidecar_app/
 - **Method channel**: `com.example.ollama_sidecar`
 - **Ollama API base URL**: `http://127.0.0.1:11434`
 - **Model storage**: `~/Library/Application Support/OllamaSidecar/models`
-- **Ollama binary in bundle**: `Contents/MacOS/ollama`
-- **Ollama binary runtime path**: `~/Library/Application Support/OllamaSidecar/ollama`
+- **Installed Ollama binary path**: `~/Library/Application Support/OllamaSidecar/ollama-bin/ollama`
 
 ## Dependencies
 
@@ -77,9 +70,9 @@ ollama_sidecar_app/
 
 ## Build Notes
 
-- Ollama binary is included in the Xcode project and copied to the app bundle during build
-- Code signing required for macOS distribution
-- Entitlements include `com.apple.security.cs.allow-unsigned-executable-memory` for running the embedded Ollama binary
+- No embedded Ollama binary; the first launch triggers an auto-download if needed.
+- Code signing required for macOS distribution.
+- Entitlements include `com.apple.security.cs.allow-unsigned-executable-memory`, `com.apple.security.network.client`, `com.apple.security.network.server`.
 - Minimum macOS deployment target: 14.0
 - App sandbox is disabled to allow subprocess spawning and localhost network access
 
@@ -87,12 +80,19 @@ ollama_sidecar_app/
 
 1. Build the app: `flutter build macos`
 2. Run the app: `flutter run -d macos`
-3. On first launch, the app copies the Ollama binary to the writable support directory and starts the server
-4. Use the UI to select models, pull models, and chat
+3. On first launch, the app checks `localhost:11434`.
+4. If no server is found, tap "ติดตั้ง Ollama อัตโนมัติ" to download and install Ollama in the background.
+5. Use the UI to select models, pull models, and chat.
+
+## Auto-Install Mechanism
+
+- Source: `https://github.com/ollama/ollama/releases/latest/download/Ollama-darwin.zip`
+- Destination: `~/Library/Application Support/OllamaSidecar/ollama-bin/ollama`
+- Permissions: `0o755` set automatically
+- After install, the app launches `ollama serve` pointing to `OLLAMA_MODELS` under the same support folder.
 
 ## Risks
 
-- The Ollama binary is ~31MB, increasing the app bundle size
-- Code signing the embedded Ollama binary may be required for distribution
-- Sandboxing restrictions may affect subprocess spawning in production builds
-- The embedded binary matches the host architecture (arm64); universal binary support would require additional work
+- Download size: The Ollama darwin release is large (~50MB+); ensure network access is available.
+- Network access: Requires network access on first install (entitlements allow it).
+- Version drift: The downloaded binary follows the latest GitHub release, which may change without the app changing.

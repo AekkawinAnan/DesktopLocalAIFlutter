@@ -37,6 +37,15 @@ class OllamaMethodChannel: NSObject, FlutterPlugin {
             result(["path": OllamaProcessManager.shared.ollamaBinaryPath])
         case "getModelsDirectory":
             result(["path": OllamaProcessManager.shared.modelsDirectory])
+        case "installOllama":
+            Task {
+                do {
+                    let success = try await OllamaProcessManager.shared.installOllama()
+                    result(["success": success])
+                } catch {
+                    result(FlutterError(code: "INSTALL_FAILED", message: error.localizedDescription, details: nil))
+                }
+            }
         default:
             result(FlutterMethodNotImplemented)
         }

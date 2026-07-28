@@ -24,6 +24,13 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -36,105 +43,112 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _onSend() {
+  Future<void> _onSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
 
     final chatService = context.read<ChatService>();
-    chatService.sendMessage(text, model: chatService.currentModel).then((_) {
-      _scrollToBottom();
-    });
+    await chatService.sendMessage(text, model: chatService.currentModel);
+    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ollama Sidecar'),
-        actions: [
-          const StatusIndicator(),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.pushNamed(context, '/settings');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.category),
-            onPressed: () {
-              Navigator.pushNamed(context, '/models');
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Consumer<ChatService>(
-              builder: (context, chatService, child) {
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(12),
-                  itemCount: chatService.messages.length,
-                  itemBuilder: (context, index) {
-                    final message = chatService.messages[index];
-                    return MessageBubble(message: message);
-                  },
-                );
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          Navigator.of(context).pushReplacementNamed('/');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Ollama Sidecar'),
+          actions: [
+            const StatusIndicator(),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Navigator.pushNamed(context, '/settings');
               },
             ),
-          ),
-          StreamBuilder<String?>(
-            stream: context.watch<ChatService>().stream,
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data != null) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: Colors.grey.shade200,
-                  child: StreamingText(text: snapshot.data!),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+            IconButton(
+              icon: const Icon(Icons.category),
+              onPressed: () {
+                Navigator.pushNamed(context, '/models');
+              },
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Type a message...',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    onSubmitted: (_) => _onSend(),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: Consumer<ChatService>(
+                builder: (context, chatService, child) {
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: chatService.messages.length,
+                    itemBuilder: (context, index) {
+                      final message = chatService.messages[index];
+                      return MessageBubble(message: message);
+                    },
+                  );
+                },
+              ),
+            ),
+            StreamBuilder<String?>(
+              stream: context.watch<ChatService>().stream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Colors.grey.shade200,
+                    child: StreamingText(text: snapshot.data!),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, -2),
                   ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _onSend,
-                  child: const Icon(Icons.send),
-                ),
-              ],
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      onSubmitted: (_) => _onSend(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _onSend,
+                    child: const Icon(Icons.send),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -22,10 +22,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     try {
-      final binaryPath = await OllamaProcessService.getOllamaBinaryPath();
-      final modelsDir = await OllamaProcessService.getModelsDirectory();
-      final version = await OllamaProcessService.getOllamaVersion();
-      final running = await OllamaProcessService.isOllamaRunning();
+      final binaryPath = await OllamaSystemService.getOllamaBinaryPath();
+      final modelsDir = await OllamaSystemService.getModelsDirectory();
+      final version = await OllamaSystemService.getOllamaVersion();
+      final running = await OllamaSystemService.isOllamaRunning();
 
       setState(() {
         _ollamaBinaryPath = binaryPath;
@@ -47,9 +47,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleOllama() async {
     try {
       if (_isRunning) {
-        await OllamaProcessService.stopOllama();
+        await OllamaSystemService.stopOllama();
       } else {
-        await OllamaProcessService.startOllama();
+        await OllamaSystemService.startOllama();
       }
     } catch (e) {
       if (!mounted) return;

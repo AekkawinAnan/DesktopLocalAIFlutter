@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/ollama_model.dart';
 import '../services/ollama_api.dart';
+import '../services/ollama_process.dart';
 import '../services/chat_service.dart';
 import '../widgets/status_indicator.dart';
 
@@ -34,7 +35,7 @@ class _ModelSelectorState extends State<ModelSelector> {
   Future<void> _loadModels() async {
     setState(() => _isLoading = true);
     try {
-      final isConnected = await OllamaApi().checkConnection();
+      final isConnected = await OllamaSystemService.isOllamaRunning();
       if (!isConnected) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,99 +108,107 @@ class _ModelSelectorState extends State<ModelSelector> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Models'),
-        actions: [
-          const StatusIndicator(),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadModels,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _pullController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter model name, e.g. llama3.2',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: _pullModel,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _pullingModel.isEmpty
-                      ? () => _pullModel(_pullController.text)
-                      : null,
-                  child: const Icon(Icons.download),
-                ),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          Navigator.of(context).pushReplacementNamed('/chat');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Models'),
+          actions: [
+            const StatusIndicator(),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadModels,
             ),
-          ),
-          if (_pullingModel.isNotEmpty)
+          ],
+        ),
+        body: Column(
+          children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.all(12),
+              child: Row(
                 children: [
-                  Text('Pulling $_pullingModel...'),
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: _pullProgress > 0 ? _pullProgress / 100.0 : null,
+                  Expanded(
+                    child: TextField(
+                      controller: _pullController,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter model name, e.g. llama3.2',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: _pullModel,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _pullingModel.isEmpty
+                        ? () => _pullModel(_pullController.text)
+                        : null,
+                    child: const Icon(Icons.download),
                   ),
                 ],
               ),
             ),
-          const SizedBox(height: 12),
-          if (_isLoading)
-            const LinearProgressIndicator()
-          else
-            const SizedBox.shrink(),
-          Expanded(
-            child: _models.isEmpty
-                ? const Center(
-                    child: Text('No models available. Pull a model to get started.'),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: _models.length,
-                    itemBuilder: (context, index) {
-                      final model = _models[index];
-                      final isPulling = _pullingModel == model.name;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          title: Text(model.name),
-                          subtitle: Text(
-                            'Size: ${(model.size / 1024 / 1024).toStringAsFixed(1)} MB',
-                          ),
-                          trailing: isPulling
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+            if (_pullingModel.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pulling $_pullingModel...'),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: _pullProgress > 0 ? _pullProgress / 100.0 : null,
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            if (_isLoading)
+              const LinearProgressIndicator()
+            else
+              const SizedBox.shrink(),
+            Expanded(
+              child: _models.isEmpty
+                  ? const Center(
+                      child: Text('No models available. Pull a model to get started.'),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _models.length,
+                      itemBuilder: (context, index) {
+                        final model = _models[index];
+                        final isPulling = _pullingModel == model.name;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(model.name),
+                            subtitle: Text(
+                              'Size: ${(model.size / 1024 / 1024).toStringAsFixed(1)} MB',
+                            ),
+                            trailing: isPulling
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.download),
+                                    onPressed: () => _pullModel(model.name),
+                                    tooltip: 'Pull model',
                                   ),
-                                )
-                              : IconButton(
-                                  icon: const Icon(Icons.download),
-                                  onPressed: () => _pullModel(model.name),
-                                  tooltip: 'Pull model',
-                                ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

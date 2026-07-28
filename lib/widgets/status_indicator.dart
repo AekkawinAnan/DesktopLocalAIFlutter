@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import '../services/ollama_process.dart';
+import 'package:ollama_sidecar_app/services/ollama_process.dart';
 
 class StatusIndicator extends StatefulWidget {
   const StatusIndicator({super.key});
@@ -22,7 +22,7 @@ class _StatusIndicatorState extends State<StatusIndicator> {
 
   Future<void> _checkOllamaStatus() async {
     try {
-      final running = await OllamaProcessService.isOllamaRunning();
+      final running = await OllamaSystemService.isOllamaRunning();
       if (mounted) {
         setState(() => _isRunning = running);
       }

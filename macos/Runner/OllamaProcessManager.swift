@@ -21,55 +21,20 @@ class OllamaProcessManager: NSObject {
     }
     
     var ollamaBinaryPath: String {
-        let bundlePath = Bundle.main.bundlePath
-        let bundledBinary = bundlePath + "/Contents/MacOS/ollama"
         let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appSupportDir = supportDir.appendingPathComponent("OllamaSidecar")
-        let runtimeBinary = appSupportDir.appendingPathComponent("ollama").path
+        let appSupportDir = supportDir.appendingPathComponent("OllamaSidecar/ollama-bin/ollama").path
         
-        if FileManager.default.fileExists(atPath: bundledBinary) {
-            return bundledBinary
+        if FileManager.default.fileExists(atPath: appSupportDir) {
+            return appSupportDir
         }
         
-        if FileManager.default.fileExists(atPath: runtimeBinary) {
-            return runtimeBinary
-        }
-        
-        return bundledBinary
+        return appSupportDir
     }
     
     var modelsDirectory: String {
         let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appSupportDir = supportDir.appendingPathComponent("OllamaSidecar/models")
         return appSupportDir.path
-    }
-    
-    func ensureRuntimeBinaryExists() throws {
-        let bundlePath = Bundle.main.bundlePath
-        let bundledBinary = bundlePath + "/Contents/MacOS/ollama"
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appSupportDir = supportDir.appendingPathComponent("OllamaSidecar")
-        let runtimeBinary = appSupportDir.appendingPathComponent("ollama").path
-        
-        if FileManager.default.fileExists(atPath: runtimeBinary) {
-            return
-        }
-        
-        if !FileManager.default.fileExists(atPath: bundledBinary) {
-            throw NSError(domain: "OllamaProcessManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Ollama binary not found in app bundle at \(bundledBinary)"])
-        }
-        
-        try FileManager.default.createDirectory(atPath: appSupportDir.path, withIntermediateDirectories: true, attributes: nil)
-        
-        try FileManager.default.copyItem(atPath: bundledBinary, toPath: runtimeBinary)
-        
-        var isExecutable: ObjCBool = false
-        if FileManager.default.isExecutableFile(atPath: runtimeBinary) {
-            isExecutable = true
-        }
-        if !isExecutable.boolValue {
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: runtimeBinary)
-        }
     }
     
     func ensureModelsDirectoryExists() throws {
@@ -89,15 +54,19 @@ class OllamaProcessManager: NSObject {
         isStarting = true
         
         do {
-            try ensureRuntimeBinaryExists()
             try ensureModelsDirectoryExists()
         } catch {
-            print("OllamaProcessManager: error ensuring binary/models: \(error)")
+            print("OllamaProcessManager: error ensuring models dir: \(error)")
             isStarting = false
             throw error
         }
         
         let executableURL = URL(fileURLWithPath: ollamaBinaryPath)
+        
+        if !FileManager.default.fileExists(atPath: executableURL.path) {
+            isStarting = false
+            throw NSError(domain: "OllamaProcessManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Ollama binary not found at \(executableURL.path). Please install Ollama first."])
+        }
         
         let process = Process()
         process.executableURL = executableURL
@@ -118,7 +87,6 @@ class OllamaProcessManager: NSObject {
         let outputHandle = outputPipe.fileHandleForReading
         let errorHandle = errorPipe.fileHandleForReading
         
-        // Set up readability handlers on a background queue
         outputHandle.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if !data.isEmpty {
@@ -149,7 +117,6 @@ class OllamaProcessManager: NSObject {
                 self.process = nil
                 self.outputPipe = nil
                 self.errorPipe = nil
-                // Clean up readability handlers and handles
                 self.outputHandle?.readabilityHandler = nil
                 self.errorHandle?.readabilityHandler = nil
                 self.outputHandle = nil
@@ -166,7 +133,6 @@ class OllamaProcessManager: NSObject {
             print("OllamaProcessManager: process launched successfully")
         } catch {
             print("OllamaProcessManager: failed to launch process: \(error)")
-            // Clean up on failure
             outputHandle.readabilityHandler = nil
             errorHandle.readabilityHandler = nil
             self.outputHandle = nil
@@ -192,16 +158,13 @@ class OllamaProcessManager: NSObject {
         print("OllamaProcessManager: stopOllama called")
         if let process = process, isRunning {
             process.terminate()
-            
             if process.isRunning {
                 process.interrupt()
             }
-            
             isRunning = false
             self.process = nil
             self.outputPipe = nil
             self.errorPipe = nil
-            // Remove readability handlers
             outputHandle?.readabilityHandler = nil
             errorHandle?.readabilityHandler = nil
             self.outputHandle = nil
@@ -209,7 +172,6 @@ class OllamaProcessManager: NSObject {
             print("OllamaProcessManager: stopped Ollama")
             return true
         }
-        
         print("OllamaProcessManager: stopOllama called but not running")
         return false
     }
@@ -226,6 +188,104 @@ class OllamaProcessManager: NSObject {
     }
     
     func getOllamaVersion() -> String {
-        return "0.31.1"
+        let binaryPath = ollamaBinaryPath
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binaryPath)
+        process.arguments = ["--version"]
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        } catch {
+            return "unknown"
+        }
+        return "unknown"
+    }
+    
+    func installOllama() async -> Bool {
+        print("OllamaProcessManager: installOllama called")
+        
+        let fileManager = FileManager.default
+        let installDir = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("OllamaSidecar/ollama-bin")
+        
+        do {
+            try fileManager.createDirectory(at: installDir, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("OllamaProcessManager: failed to create install dir: \(error)")
+            return false
+        }
+        
+        let downloadURL = URL(string: "https://github.com/ollama/ollama/releases/latest/download/Ollama-darwin.zip")!
+        let zipPath = installDir.appendingPathComponent("ollama.zip")
+        let binaryPath = installDir.appendingPathComponent("ollama")
+        
+        do {
+            let tempURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                let task = URLSession.shared.downloadTask(with: downloadURL) { tempURL, _, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let tempURL = tempURL else {
+                        continuation.resume(throwing: NSError(domain: "OllamaProcessManager", code: 3, userInfo: [NSLocalizedDescriptionKey: "Download failed"]))
+                        return
+                    }
+                    continuation.resume(returning: tempURL)
+                }
+                task.resume()
+            }
+            
+            if fileManager.fileExists(atPath: zipPath.path) {
+                try? fileManager.removeItem(at: zipPath)
+            }
+            try fileManager.moveItem(at: tempURL, to: zipPath)
+        } catch {
+            print("OllamaProcessManager: download failed: \(error)")
+            return false
+        }
+        
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        task.arguments = ["-o", zipPath.path, "-d", installDir.path]
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            guard task.terminationStatus == 0 else {
+                print("OllamaProcessManager: unzip failed")
+                try? fileManager.removeItem(at: zipPath)
+                return false
+            }
+        } catch {
+            print("OllamaProcessManager: unzip error: \(error)")
+            try? fileManager.removeItem(at: zipPath)
+            return false
+        }
+        
+        try? fileManager.removeItem(at: zipPath)
+        
+        do {
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binaryPath.path)
+        } catch {
+            print("OllamaProcessManager: chmod failed: \(error)")
+            return false
+        }
+        
+        print("OllamaProcessManager: installOllama succeeded at \(binaryPath.path)")
+        return true
     }
 }
