@@ -23,7 +23,7 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendMessage(String userMessage, {String model = ''}) async {
+  Future<void> sendMessage(String userMessage, {String model = '', List<String>? images}) async {
     if (_isStreaming) return;
 
     if (model.isEmpty) {
@@ -43,6 +43,7 @@ class ChatService extends ChangeNotifier {
       role: 'user',
       content: userMessage,
       createdAt: DateTime.now(),
+      images: images,
     );
     _messages.add(userMsg);
     notifyListeners();
@@ -63,9 +64,15 @@ class ChatService extends ChangeNotifier {
     try {
       final stream = _api.chatStream(
         model: model,
-        messages: _messages.map((m) => {
-          'role': m.role,
-          'content': m.content,
+        messages: _messages.map((m) {
+          final msg = <String, dynamic>{
+            'role': m.role,
+            'content': m.content,
+          };
+          if (m.images != null && m.images!.isNotEmpty) {
+            msg['images'] = m.images;
+          }
+          return msg;
         }).toList(),
       );
 

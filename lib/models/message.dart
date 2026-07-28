@@ -3,12 +3,14 @@ class Message {
   final String role;
   final String content;
   final DateTime createdAt;
+  final List<String>? images;
 
   Message({
     required this.id,
     required this.role,
     required this.content,
     required this.createdAt,
+    this.images,
   });
 
   Map<String, dynamic> toJson() {
@@ -17,6 +19,7 @@ class Message {
       'role': role,
       'content': content,
       'createdAt': createdAt.toIso8601String(),
+      if (images != null && images!.isNotEmpty) 'images': images,
     };
   }
 
@@ -26,6 +29,7 @@ class Message {
       role: json['role'] as String,
       content: json['content'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      images: json['images'] != null ? List<String>.from(json['images'] as List) : null,
     );
   }
 }
