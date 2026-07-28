@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ollama_sidecar_app/services/ollama_api.dart';
@@ -288,8 +289,8 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
   Future<void> _exportCsv() async {
     if (_extractedItems.isEmpty) return;
-    final buffer = StringBuffer();
-    buffer.writeln('item,quantity,price');
+      final buffer = StringBuffer();
+      buffer.writeln('item,quantity,price');
     for (final item in _extractedItems) {
       buffer.writeln('${item['item']},${item['quantity']},${item['price']}');
     }
@@ -302,7 +303,12 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       }
       final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
       final file = File('${downloadsDir.path}/receipt_$timestamp.csv');
-      await file.writeAsString(buffer.toString(), flush: true);
+      final bytes = Uint8List.fromList(<int>[0xEF, 0xBB, 0xBF]);
+      final sink = file.openWrite();
+      sink.add(bytes);
+      sink.add(utf8.encode(buffer.toString()));
+      await sink.flush();
+      await sink.close();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
